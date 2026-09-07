@@ -1,360 +1,298 @@
-
 # Proyecto de Data Analytics — Online Retail II
 
 ## Descripción
 
-Proyecto de análisis y procesamiento de datos desarrollado para el análisis de información comercial del dataset Online Retail II.
+Proyecto de análisis y procesamiento de datos desarrollado para el análisis de información comercial del dataset **Online Retail II**.
 
-El proyecto utiliza información de ventas de los archivos `Retail 2009-10.csv` y `Retail 2010-11.csv`, correspondientes a transacciones comerciales realizadas durante los períodos 2009-2010 y 2010-2011.
-
-El flujo del proyecto consiste en extraer los datos desde archivos CSV, realizar limpieza y transformación mediante Python y Pandas, estructurar la información en diferentes tablas y cargar los datos procesados en PostgreSQL para su posterior análisis en Power BI.
+La solución utiliza los archivos de ventas correspondientes a los períodos 2009-2010 y 2010-2011. Los datos son procesados mediante Python y Pandas, almacenados en PostgreSQL y posteriormente utilizados en Power BI para realizar análisis y visualizaciones.
 
 ---
 
-## Tecnologías utilizadas
-
-- Python
-- Pandas
-- NumPy
-- PostgreSQL
-- SQLAlchemy
-- Psycopg2
-- python-dotenv
-- Power BI
-- Git / GitHub
-
----
-
-## Flujo del proyecto
-
-```text
-Retail 2009-10.csv ──┐
-                     │
-Retail 2010-11.csv ──┤
-                     ▼
-                  Pandas
-                     │
-                     ▼
-          Limpieza y transformación
-                     │
-                     ▼
-               Normalización
-                     │
-                     ▼
-                PostgreSQL
-                     │
-                     ▼
-                 Power BI
-                     │
-                     ▼
-             Análisis de datos
-```
-
----
-
-## Dataset
-
-El proyecto utiliza el dataset **Online Retail II**, dividido en dos archivos:
-
-- `Retail 2009-10.csv`
-- `Retail 2010-11.csv`
-
-Ambos archivos son cargados mediante Pandas y posteriormente concatenados en un único DataFrame.
-
-```python
-df2009 = pd.read_csv("data/Retail 2009-10.csv")
-df2010 = pd.read_csv("data/Retail 2010-11.csv")
-
-df = pd.concat([df2009, df2010], ignore_index=True)
-```
-
-El dataset contiene información relacionada con:
-
-- Facturas
-- Productos
-- Cantidades
-- Precios
-- Fechas de facturación
-- Clientes
-- Países
-
----
-
-# Proceso ETL
-
-## 1. Extract
-
-Los dos archivos CSV son cargados utilizando `pandas.read_csv()` y posteriormente combinados en un único DataFrame.
-
-También se conserva una copia de los datos originales mediante `raw_df` para mantener una referencia de los datos antes de la transformación.
-
----
-
-## 2. Transform
-
-### Tratamiento de valores nulos
-
-Se realizó una revisión inicial de los valores nulos y tipos de datos.
-
-Las columnas `Description` y `Customer ID` fueron analizadas durante el proceso de limpieza.
-
-Se decidió eliminar:
-
-- Registros sin `Description`.
-- Registros sin `Customer ID`.
-
-Esto permite trabajar posteriormente con información de productos y clientes identificables.
-
-### Conversión de tipos
-
-La columna `InvoiceDate` fue convertida a tipo fecha mediante `pandas.to_datetime()`.
-
-La columna `Customer ID` fue convertida a formato numérico utilizando el tipo nullable `Int64`.
-
-### Duplicados
-
-Se identificaron y eliminaron registros duplicados mediante:
-
-```python
-clean_df = clean_df.drop_duplicates()
-```
-
-También se realizaron validaciones posteriores para comprobar posibles duplicados en clientes, productos y facturas.
-
-### Revenue
-
-Se creó una nueva columna denominada `Revenue`:
-
-```text
-Revenue = Quantity × Price
-```
-
-Esta columna representa el ingreso asociado a cada registro de transacción.
-
-### Año
-
-Se creó la columna `Year` a partir de `InvoiceDate`:
-
-```python
-clean_df["Year"] = clean_df["InvoiceDate"].dt.year
-```
-
-Esta columna permite realizar análisis agrupados por año.
-
----
-
-# Modelo de datos
-
-Después de la limpieza, la información se dividió en cuatro tablas principales.
-
-## Customer
-
-Contiene información de los clientes:
-
-- `Customer ID`
-- `Country`
-
-Se eliminan duplicados utilizando `Customer ID` como identificador.
-
-## Products
-
-Contiene información de los productos:
-
-- `StockCode`
-- `Description`
-
-Los productos se deduplican utilizando `StockCode`.
-
-## Invoices
-
-Contiene información de las facturas:
-
-- `Invoice`
-- `InvoiceDate`
-- `Customer ID`
-
-Cada factura se conserva de forma única utilizando `Invoice`.
-
-## Transactions
-
-Contiene la información principal de las transacciones:
-
-- `Transaction ID`
-- `Invoice`
-- `StockCode`
-- `Quantity`
-- `Price`
-- `Revenue`
-
-El `Transaction ID` se genera durante el proceso de transformación.
-
----
-
-## Estructura de relaciones
-
-El modelo puede representarse conceptualmente de la siguiente manera:
-
-```text
-        Customer
-           │
-           │ Customer ID
-           ▼
-        Invoices
-           │
-           │ Invoice
-           ▼
-      Transactions
-           │
-           │ StockCode
-           ▼
-        Products
-```
-
----
-
-# Validaciones
-
-Durante el proceso se realizaron diferentes validaciones de calidad de datos.
-
-Se verificaron:
-
-- Cantidad de valores nulos.
-- Cantidad de registros duplicados.
-- Duplicados en clientes.
-- Duplicados en productos.
-- Duplicados en facturas.
-- Descripciones diferentes asociadas a un mismo `StockCode`.
-- Clientes diferentes asociados a una misma factura.
-- Fechas diferentes asociadas a una misma factura.
-- Consistencia entre `Quantity × Price` y `Revenue`.
-
-La consistencia del cálculo de revenue se comprobó mediante:
-
-```python
-(
-    transactions["Quantity"] * transactions["Price"]
-    == transactions["Revenue"]
-).all()
-```
-
----
-
-# PostgreSQL
-
-Los datos transformados fueron cargados en una base de datos PostgreSQL denominada:
-
-```text
-Prueba
-```
-
-La conexión se realiza mediante SQLAlchemy y las credenciales se obtienen mediante variables de entorno.
-
-```python
-password = os.getenv("DB_PASSWORD")
-
-engine = create_engine(
-    f"postgresql+psycopg2://postgres:{password}@localhost:5432/Prueba"
-)
-```
-
-Las tablas cargadas son:
-
-- `customer`
-- `products`
-- `invoices`
-- `transactions`
-
----
-
-# Seguridad
-
-La contraseña de PostgreSQL no se encuentra escrita directamente en el código.
-
-Se utiliza un archivo `.env` para almacenar la variable:
-
-```text
-DB_PASSWORD
-```
-
-El archivo `.env` permanece fuera del repositorio mediante `.gitignore`.
-
-Esto evita publicar credenciales sensibles en GitHub.
-
----
-
-# Power BI
-
-La información almacenada en PostgreSQL puede utilizarse como fuente para Power BI.
-
-El análisis permite visualizar aspectos como:
-
-- Evolución de ingresos.
-- Productos con mayor desempeño.
-- Distribución de ingresos.
-- Comportamiento por país.
-- Comportamiento de clientes.
-- Relación entre cantidad, precio e ingresos.
-
----
-
-# Resultados del proceso
-
-Después de realizar la limpieza y transformación, los datos son estructurados en tablas relacionadas y cargados en PostgreSQL.
-
-El proceso permite pasar de los archivos originales de ventas a una estructura organizada para análisis y Business Intelligence.
-
----
-
-# Estructura del proyecto
-
-```text
-DataAnalytics/
+## Objetivo
+
+Procesar y organizar información de ventas para obtener una estructura de datos adecuada para su almacenamiento y análisis.
+
+El flujo principal de la solución es:
+
+Archivos CSV
+     ↓
+Python / Pandas
+     ↓
+Limpieza y transformación
+     ↓
+Organización de los datos
+     ↓
+PostgreSQL
+     ↓
+Power BI
+     ↓
+Análisis y visualización
+Tecnologías utilizadas
+Python
+Pandas
+NumPy
+PostgreSQL
+SQLAlchemy
+Psycopg2
+python-dotenv
+Power BI
+Git / GitHub
+Estructura del proyecto
+Prueba-Desempeno-Data-Analisis-1/
 │
 ├── data/
 │   ├── Retail 2009-10.csv
 │   └── Retail 2010-11.csv
 │
-├── .gitignore
+├── sql/
+│   └── DML.sql
+│
+├── captures/
+│
 ├── main.py
 ├── etl.py
-└── requirements.txt
-```
+└── README.md
+Archivos principales
 
-> El archivo `.env` y el entorno virtual `.venv` no deben incluirse en el repositorio.
+main.py
 
----
+Archivo principal utilizado para ejecutar el proceso ETL.
 
-# Ejecución
+etl.py
 
-## 1. Instalar dependencias
+Contiene el proceso ETL utilizado para cargar, limpiar, transformar y almacenar los datos.
 
-```bash
-pip install -r requirements.txt
-```
+sql/DML.sql
 
-## 2. Configurar las variables de entorno
+Contiene las instrucciones SQL utilizadas para crear las tablas de PostgreSQL.
 
-Crear un archivo `.env` con las credenciales necesarias para PostgreSQL.
+data/
 
-## 3. Ejecutar el proceso
+Contiene los archivos CSV utilizados como fuente de información.
 
-```bash
+Dataset
+
+El proyecto utiliza el dataset Online Retail II, dividido en dos archivos:
+
+Retail 2009-10.csv
+Retail 2010-11.csv
+
+Los archivos son cargados mediante Pandas y posteriormente combinados para realizar el procesamiento.
+
+Proceso ETL
+Extract
+
+Los archivos CSV son cargados mediante Pandas:
+
+df2009 = pd.read_csv("data/Retail 2009-10.csv")
+df2010 = pd.read_csv("data/Retail 2010-11.csv")
+
+df = pd.concat([df2009, df2010], ignore_index=True)
+Transform
+
+Durante el proceso se realizan diferentes operaciones:
+
+Tratamiento de valores nulos.
+Conversión de InvoiceDate a formato de fecha.
+Conversión de Customer ID a formato numérico.
+Eliminación de registros incompletos.
+Eliminación de registros duplicados.
+Creación de la columna Revenue.
+
+El ingreso de cada registro se calcula mediante:
+
+Revenue = Quantity × Price
+
+También se genera una columna Year a partir de la fecha de factura.
+
+Load
+
+Los datos procesados se organizan en cuatro tablas y posteriormente se cargan en PostgreSQL:
+
+customer
+products
+invoices
+transactions
+Modelo de datos
+
+La información se organiza de la siguiente manera:
+
+Customer
+
+Contiene:
+
+Customer ID
+Country
+Products
+
+Contiene:
+
+StockCode
+Description
+Invoices
+
+Contiene:
+
+Invoice
+InvoiceDate
+Customer ID
+Transactions
+
+Contiene:
+
+Transaction ID
+Invoice
+StockCode
+Quantity
+Price
+Revenue
+
+Las tablas se relacionan mediante claves primarias y foráneas.
+
+Customer
+   │
+   │ Customer ID
+   ▼
+Invoices
+   │
+   │ Invoice
+   ▼
+Transactions
+   │
+   │ StockCode
+   ▼
+Products
+PostgreSQL
+
+Los datos procesados se almacenan en una base de datos PostgreSQL llamada:
+
+Prueba
+
+El archivo sql/DML.sql contiene la estructura de las tablas utilizadas por la solución.
+
+Las tablas creadas son:
+
+customer
+products
+invoices
+transactions
+Instalación y configuración
+1. Clonar el repositorio
+git clone https://github.com/mateoriwi/Prueba-Desempeno-Data-Analisis-1.git
+
+Ingresar a la carpeta:
+
+cd Prueba-Desempeno-Data-Analisis-1
+2. Crear el entorno virtual
+python -m venv .venv
+
+En Windows:
+
+.venv\Scripts\activate
+3. Instalar las dependencias
+pip install pandas numpy psycopg2 sqlalchemy python-dotenv
+4. Configurar PostgreSQL
+
+Crear una base de datos llamada:
+
+Prueba
+
+Después ejecutar el archivo:
+
+sql/DML.sql
+
+Esto crea las tablas necesarias para almacenar la información.
+
+5. Configurar las credenciales
+
+Crear un archivo .env en la raíz del proyecto:
+
+.env
+
+Agregar:
+
+DB_PASSWORD=TU_CONTRASEÑA
+
+Reemplazar TU_CONTRASEÑA por la contraseña del usuario de PostgreSQL.
+
+El archivo .env no debe publicarse en el repositorio.
+
+Ejecución
+
+Con PostgreSQL configurado y el entorno virtual activado, ejecutar:
+
 python main.py
-```
 
-El programa:
+El proceso realiza automáticamente:
 
-1. Carga los dos archivos CSV.
-2. Combina los datasets.
-3. Limpia y transforma los datos.
-4. Crea las tablas de clientes, productos, facturas y transacciones.
-5. Realiza validaciones.
-6. Se conecta a PostgreSQL.
-7. Carga las tablas en la base de datos.
+Carga de los archivos CSV.
+Unión de los datasets.
+Limpieza de los datos.
+Transformación de los datos.
+Organización de la información.
+Conexión con PostgreSQL.
+Carga de las tablas en la base de datos.
 
----
+Cuando la ejecución termina correctamente se muestra:
 
-## Autor
+¡Conexión exitosa con PostgreSQL!
+Proceso ETL completado correctamente.
+Power BI
 
-**Mateo Hernandez Mendoza**
-Cohorte 5 — Análisis de Datos
+Los datos almacenados en PostgreSQL pueden utilizarse en Power BI para realizar el análisis y visualización de la información.
+
+El análisis permite consultar aspectos como:
+
+Ingresos.
+Transacciones.
+Productos.
+Clientes.
+Países.
+Cantidades vendidas.
+Evolución de las ventas.
+
+El modelo de datos utilizado en Power BI está compuesto por las tablas:
+
+Customer
+Invoices
+Transactions
+Products
+Funcionalidades
+
+La solución permite:
+
+Procesar archivos de ventas.
+Limpiar datos.
+Transformar tipos de datos.
+Eliminar registros duplicados e incompletos.
+Calcular ingresos.
+Organizar los datos en tablas relacionadas.
+Almacenar la información en PostgreSQL.
+Utilizar los datos en Power BI.
+Analizar los resultados mediante indicadores y visualizaciones.
+Buenas prácticas aplicadas
+
+Durante el desarrollo se aplicaron algunas prácticas para mantener organizada y segura la solución:
+
+Separación de los datos fuente y los datos procesados.
+Uso de variables de entorno para las credenciales de PostgreSQL.
+Organización del proyecto mediante carpetas.
+Uso de nombres descriptivos para variables y tablas.
+Eliminación de registros duplicados.
+Validación y transformación de los tipos de datos.
+Separación del proceso principal y del proceso ETL.
+Resultado esperado
+
+Al finalizar correctamente el proceso se obtiene:
+
+CSV
+ ↓
+ETL
+ ↓
+PostgreSQL
+ ↓
+Power BI
+ ↓
+Dashboard
+
+La información de ventas queda procesada, organizada y disponible para realizar análisis mediante Power BI.
